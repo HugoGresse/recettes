@@ -53,6 +53,12 @@ layout: default
 
   .recipe__title {
     margin-bottom: var(--space-md);
+
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    background-color: rgba(248, 250, 252, 0.8);
   }
 
   .recipe__description {

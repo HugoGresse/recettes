@@ -1,8 +1,8 @@
 # Site settings
 title: "Recettes"
 description: "Collection de recettes délicieuses et faciles à réaliser"
-url: ""
-baseurl: ""
+url: "https://hugogresse.github.io"
+baseurl: "/recettes"
 
 # Build settings
 markdown: kramdown

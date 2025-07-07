@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Recettes de Hugo
+title: Recettes
 ---
 
 # Recettes
@@ -11,7 +11,7 @@ Bienvenue sur l'index des recettes !
   {% for page in site.pages %}
     {% if page.path contains "/" and page.path contains ".md" and page.path != "index.md" %}
       <li>
-        <a href="{{ page.url }}">{{ page.title | default: page.path }}</a>
+        <a href="{{ page.url | relative_url }}">{{ page.title | default: page.path }}</a>
       </li>
     {% endif %}
   {% endfor %}
