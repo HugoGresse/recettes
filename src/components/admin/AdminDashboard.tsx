@@ -44,7 +44,7 @@ export default function AdminDashboard() {
           </header>
           <p class="welcome-text">Welcome, {session.user.email}</p>
           
-          <Generator user={session.user} />
+          <Generator session={session} />
         </div>
       )}
 

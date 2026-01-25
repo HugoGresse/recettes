@@ -54,7 +54,35 @@ create policy "Users can update their own settings"
 2. Enable **Email/Password**.
 3. (Optional) Disable "Confirm email" in Authentication > URL Configuration if you want to test quickly.
 
-## 5. Deployment
+## 5. Setup OAuth Providers (Google & GitHub)
+
+### GitHub Login
+1. Create a GitHub OAuth App in GitHub Developer Settings.
+   - Homepage URL: Your site URL (e.g. `http://localhost:4321` or `https://hugogresse.github.io/recettes`)
+   - Authorization callback URL: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+2. Go to **Authentication > Providers** in Supabase.
+3. Enable **GitHub**.
+4. Enter your **Client ID** and **Client Secret**.
+
+### Google Login
+1. Create a project in Google Cloud Console.
+2. Set up OAuth consent screen.
+3. Create OAuth 2.0 Client credentials.
+   - Authorized redirect URIs: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+4. Go to **Authentication > Providers** in Supabase.
+5. Enable **Google**.
+6. Enter your **Client ID** and **Client Secret**.
+
+## 6. Configure Redirect URLs (Crucial for Production)
+For the login to work on GitHub Pages, you must whitelist the URL in Supabase.
+
+1. Go to **Authentication > URL Configuration**.
+2. Under **Redirect URLs**, add your production URL.
+   - Example: `https://hugogresse.github.io/recettes/admin`
+   - Or allow all subpaths: `https://hugogresse.github.io/recettes/**`
+3. Ensure your **Site URL** is set correctly (e.g. `http://localhost:4321` for dev, or your production URL).
+
+## 7. Deployment
 When deploying to GitHub Pages, add these secrets to your repository (Settings > Secrets and variables > Actions):
 - `PUBLIC_SUPABASE_URL`
 - `PUBLIC_SUPABASE_ANON_KEY`

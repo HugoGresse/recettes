@@ -10,7 +10,8 @@ interface UserSettings {
   github_repo: string;
 }
 
-export default function Generator({ user }: { user: any }) {
+export default function Generator({ session }: { session: any }) {
+  const user = session.user;
   const [settings, setSettings] = useState<UserSettings>({
     openrouter_key: '',
     github_token: '',
@@ -35,18 +36,24 @@ export default function Generator({ user }: { user: any }) {
         .eq('user_id', user.id)
         .single();
       
+      const sessionGithubToken = session.provider_token && session.user.app_metadata.provider === 'github' 
+        ? session.provider_token 
+        : '';
+
       if (data) {
         setSettings({
           openrouter_key: data.openrouter_key || '',
-          github_token: data.github_token || '',
+          github_token: data.github_token || sessionGithubToken || '',
           github_owner: data.github_owner || 'hugogresse',
           github_repo: data.github_repo || 'recettes'
         });
+      } else if (sessionGithubToken) {
+         setSettings(s => ({ ...s, github_token: sessionGithubToken }));
       }
       setLoadingSettings(false);
     }
     loadSettings();
-  }, [user.id]);
+  }, [user.id, session.provider_token]);
 
   const saveSettings = async (e: Event) => {
     e.preventDefault();
@@ -132,8 +139,10 @@ export default function Generator({ user }: { user: any }) {
   };
 
   const publishToGithub = async () => {
-    if (!settings.github_token) {
-      setMessage('Please save your GitHub Token first in Settings.');
+    const token = settings.github_token;
+    
+    if (!token) {
+      setMessage('Please save your GitHub Token first in Settings or login with GitHub.');
       setActiveTab('settings');
       return;
     }
@@ -142,7 +151,7 @@ export default function Generator({ user }: { user: any }) {
     setMessage('Publishing to GitHub...');
 
     try {
-      const octokit = new Octokit({ auth: settings.github_token });
+      const octokit = new Octokit({ auth: token });
       const path = `src/content/recipes/${generatedSlug}.md`; // Put in root or organize by folders? Putting in root of recipes for simplicity or sweet/savory if detected. 
       // For now, let's put it in a 'generated' folder or just root 'src/content/recipes' if supported. 
       // The current setup has 'sweet' folder. Let's ask user or just put in 'generated'.
