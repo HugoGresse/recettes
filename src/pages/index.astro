@@ -1,0 +1,20 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getCollection } from 'astro:content';
+
+const recipes = await getCollection('recipes');
+const title = "Recettes";
+---
+
+<Layout title={title}>
+	<h1>{title}</h1>
+	<p>Bienvenue sur l'index des recettes !</p>
+
+	<ul>
+		{recipes.map(recipe => (
+			<li>
+				<a href={`${import.meta.env.BASE_URL}/${recipe.slug}/`.replace(/\/\//g, '/')}>{recipe.data.title}</a>
+			</li>
+		))}
+	</ul>
+</Layout>

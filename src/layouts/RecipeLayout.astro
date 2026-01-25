@@ -1,0 +1,204 @@
+---
+import Layout from './Layout.astro';
+
+interface Props {
+	title: string;
+	description?: string;
+	prep_time?: string;
+	cook_time?: string;
+	servings?: number | string;
+	difficulty?: string;
+}
+
+const { title, description, prep_time, cook_time, servings, difficulty } = Astro.props;
+---
+
+<Layout title={title} description={description}>
+	<article class="recipe">
+		<header class="recipe__header">
+			<h1 class="recipe__title">{title}</h1>
+			{description && <p class="recipe__description">{description}</p>}
+
+			<div class="recipe__meta">
+				{prep_time && (
+					<div class="recipe__meta-item">
+						<span class="recipe__meta-icon">⏱️</span>
+						<span>Préparation: {prep_time}</span>
+					</div>
+				)}
+				{cook_time && (
+					<div class="recipe__meta-item">
+						<span class="recipe__meta-icon">🔥</span>
+						<span>Cuisson: {cook_time}</span>
+					</div>
+				)}
+				{servings && (
+					<div class="recipe__meta-item">
+						<span class="recipe__meta-icon">👥</span>
+						<span>{servings} personnes</span>
+					</div>
+				)}
+				{difficulty && (
+					<div class="recipe__meta-item">
+						<span class="recipe__meta-icon">📊</span>
+						<span>{difficulty}</span>
+					</div>
+				)}
+			</div>
+		</header>
+
+		<div class="recipe__content">
+			<slot />
+		</div>
+
+		<footer class="recipe__footer">
+			<a href={import.meta.env.BASE_URL} class="recipe__back-link">← Retour aux recettes</a>
+		</footer>
+	</article>
+</Layout>
+
+<style>
+	.recipe__header {
+		text-align: center;
+		margin-bottom: var(--space-2xl);
+		padding-bottom: var(--space-xl);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.recipe__title {
+		margin-bottom: var(--space-md);
+		/* Sticky header effect removed or needs context, keeping basic for now */
+		/* position: sticky; top: 0; z-index: 100; ... */
+	}
+
+	.recipe__description {
+		font-size: 1.125rem;
+		color: var(--color-text-secondary);
+		font-style: italic;
+		max-width: none;
+		margin: 0 auto var(--space-lg);
+	}
+
+	.recipe__meta {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-lg);
+		margin-top: var(--space-lg);
+	}
+
+	.recipe__meta-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		background-color: var(--color-surface-elevated);
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--color-border);
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+	}
+
+	.recipe__meta-icon {
+		font-size: 1rem;
+	}
+
+	.recipe__content {
+		max-width: var(--content-max-width);
+		margin: 0 auto;
+	}
+	
+	/* Deep selectors for markdown content */
+	.recipe__content :global(h2) {
+		color: var(--color-primary);
+		font-size: 1.5rem;
+		margin-top: var(--space-2xl);
+		margin-bottom: var(--space-md);
+		padding-bottom: var(--space-sm);
+		border-bottom: 2px solid var(--color-border);
+	}
+
+	.recipe__content :global(ol) {
+		counter-reset: recipe-step;
+		list-style: none;
+		padding: 0;
+	}
+
+	.recipe__content :global(ol li) {
+		counter-increment: recipe-step;
+		position: relative;
+		padding: var(--space-md) var(--space-md) var(--space-md) var(--space-3xl);
+		margin-bottom: var(--space-md);
+		background-color: var(--color-surface-elevated);
+		border-radius: var(--radius-md);
+		border-left: 3px solid var(--color-primary);
+	}
+
+	.recipe__content :global(ol li::before) {
+		content: counter(recipe-step);
+		position: absolute;
+		left: var(--space-md);
+		top: var(--space-md);
+		background-color: var(--color-primary);
+		color: white;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.75rem;
+		font-weight: 600;
+	}
+
+	.recipe__content :global(ul li) {
+		position: relative;
+		padding-left: var(--space-lg);
+		margin-bottom: var(--space-sm);
+	}
+
+	.recipe__content :global(ul li::before) {
+		content: "•";
+		color: var(--color-primary);
+		position: absolute;
+		left: 0;
+		font-weight: bold;
+		font-size: 1.2rem;
+	}
+
+	.recipe__footer {
+		margin-top: var(--space-2xl);
+		padding-top: var(--space-xl);
+		border-top: 1px solid var(--color-border);
+		text-align: center;
+	}
+
+	.recipe__back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+		color: var(--color-primary);
+		text-decoration: none;
+		font-weight: 500;
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		transition: all 0.2s ease;
+	}
+
+	.recipe__back-link:hover {
+		background-color: var(--color-surface-hover);
+		transform: translateX(-2px);
+	}
+
+	@media (max-width: 640px) {
+		.recipe__meta {
+			flex-direction: column;
+			align-items: center;
+		}
+
+		.recipe__content :global(ol li) {
+			padding-left: var(--space-2xl);
+		}
+	}
+</style>
