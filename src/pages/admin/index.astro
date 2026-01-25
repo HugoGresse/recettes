@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AdminDashboardClient from '../../components/admin/AdminDashboard';
+---
+
+<Layout title="Admin - Recipe Generator">
+  <div class="container" style="padding-top: var(--space-2xl); padding-bottom: var(--space-2xl);">
+    <h1>Recipe Generator</h1>
+    <AdminDashboardClient client:only="preact" />
+  </div>
+</Layout>
