@@ -41,10 +41,11 @@ export default function Auth({ onLogin }: { onLogin: (user: any) => void }) {
     setLoading(true);
     setMessage('');
     try {
+      const redirectUrl = `${window.location.origin}${window.location.pathname}`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: window.location.href, // Redirect back to current page
+          redirectTo: redirectUrl,
           scopes: provider === 'github' ? 'repo' : undefined,
         },
       });
