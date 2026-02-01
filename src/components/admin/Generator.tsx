@@ -1,7 +1,7 @@
-import { h, Fragment } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
-import { supabase } from '../../lib/supabase';
-import { Octokit } from 'octokit';
+import { h, Fragment } from "preact";
+import { useState, useEffect } from "preact/hooks";
+import { supabase } from "../../lib/supabase";
+import { Octokit } from "octokit";
 
 interface UserSettings {
   openrouter_key: string;
@@ -13,42 +13,46 @@ interface UserSettings {
 export default function Generator({ session }: { session: any }) {
   const user = session.user;
   const [settings, setSettings] = useState<UserSettings>({
-    openrouter_key: '',
-    github_token: '',
-    github_owner: 'hugogresse', // Default or fetch
-    github_repo: 'recettes'    // Default or fetch
+    openrouter_key: "",
+    github_token: "",
+    github_owner: "hugogresse", // Default or fetch
+    github_repo: "recettes", // Default or fetch
   });
   const [loadingSettings, setLoadingSettings] = useState(true);
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [generatedContent, setGeneratedContent] = useState('');
-  const [generatedTitle, setGeneratedTitle] = useState('');
-  const [generatedSlug, setGeneratedSlug] = useState('');
-  const [message, setMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'generate' | 'settings'>('generate');
+  const [generatedContent, setGeneratedContent] = useState("");
+  const [generatedTitle, setGeneratedTitle] = useState("");
+  const [generatedSlug, setGeneratedSlug] = useState("");
+  const [message, setMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<"generate" | "settings">(
+    "generate",
+  );
 
   // Load settings on mount
   useEffect(() => {
     async function loadSettings() {
       const { data, error } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', user.id)
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", user.id)
         .single();
-      
-      const sessionGithubToken = session.provider_token && session.user.app_metadata.provider === 'github' 
-        ? session.provider_token 
-        : '';
+
+      const sessionGithubToken =
+        session.provider_token &&
+        session.user.app_metadata.provider === "github"
+          ? session.provider_token
+          : "";
 
       if (data) {
         setSettings({
-          openrouter_key: data.openrouter_key || '',
-          github_token: data.github_token || sessionGithubToken || '',
-          github_owner: data.github_owner || 'hugogresse',
-          github_repo: data.github_repo || 'recettes'
+          openrouter_key: data.openrouter_key || "",
+          github_token: data.github_token || sessionGithubToken || "",
+          github_owner: data.github_owner || "hugogresse",
+          github_repo: data.github_repo || "recettes",
         });
       } else if (sessionGithubToken) {
-         setSettings(s => ({ ...s, github_token: sessionGithubToken }));
+        setSettings((s) => ({ ...s, github_token: sessionGithubToken }));
       }
       setLoadingSettings(false);
     }
@@ -58,43 +62,45 @@ export default function Generator({ session }: { session: any }) {
   const saveSettings = async (e: Event) => {
     e.preventDefault();
     setLoadingSettings(true);
-    const { error } = await supabase.from('user_settings').upsert({
+    const { error } = await supabase.from("user_settings").upsert({
       user_id: user.id,
-      ...settings
+      ...settings,
     });
-    
+
     if (error) setMessage(`Error saving settings: ${error.message}`);
     else {
-      setMessage('Settings saved!');
-      setActiveTab('generate');
+      setMessage("Settings saved!");
+      setActiveTab("generate");
     }
     setLoadingSettings(false);
   };
 
   const generateRecipe = async () => {
     if (!settings.openrouter_key) {
-      setMessage('Please save your OpenRouter API Key first in Settings.');
-      setActiveTab('settings');
+      setMessage("Please save your OpenRouter API Key first in Settings.");
+      setActiveTab("settings");
       return;
     }
 
     setGenerating(true);
-    setMessage('');
-    setGeneratedContent('');
+    setMessage("");
+    setGeneratedContent("");
 
     try {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${settings.openrouter_key}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "model": "google/gemini-2.0-flash-lite-preview-02-05:free", // Cheap/Free model
-          "messages": [
-            {
-              "role": "system",
-              "content": `You are a recipe generator. Generate a recipe in Markdown format compatible with Astro content collections.
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${settings.openrouter_key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "openai/gpt-5.2", // Cheap/Free model
+            messages: [
+              {
+                role: "system",
+                content: `Tu es une aide a la cuisine. Tu me donnes le recettes de cuisine avec un duplicata des quantités directement dans les instructions. Tu me dis aussi les points a faire attention pour bien réussir la recette. Generate a recipe in Markdown format compatible with Astro content collections.
               Frontmatter (YAML) is REQUIRED:
               ---
               title: "Recipe Title"
@@ -105,16 +111,17 @@ export default function Generator({ session }: { session: any }) {
               difficulty: "Easy/Medium/Hard"
               ---
               
-              Followed by the recipe content in French. Use ## for sections (Ingrédients, Instructions).`
-            },
-            { "role": "user", "content": `Create a recipe for: ${prompt}` }
-          ]
-        })
-      });
+              Followed by the recipe content in French. Use ## for sections (Ingrédients, Instructions).`,
+              },
+              { role: "user", content: `Create a recipe for: ${prompt}` },
+            ],
+          }),
+        },
+      );
 
       const data = await response.json();
       if (data.error) throw new Error(data.error.message);
-      
+
       const content = data.choices[0].message.content;
       setGeneratedContent(content);
 
@@ -124,13 +131,19 @@ export default function Generator({ session }: { session: any }) {
         const title = titleMatch[1];
         setGeneratedTitle(title);
         // Create simple slug
-        setGeneratedSlug(title.toLowerCase()
-          .replace(/[àâä]/g, 'a').replace(/[éèêë]/g, 'e').replace(/[îï]/g, 'i').replace(/[ôö]/g, 'o').replace(/[ùûü]/g, 'u').replace(/[ç]/g, 'c')
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
+        setGeneratedSlug(
+          title
+            .toLowerCase()
+            .replace(/[àâä]/g, "a")
+            .replace(/[éèêë]/g, "e")
+            .replace(/[îï]/g, "i")
+            .replace(/[ôö]/g, "o")
+            .replace(/[ùûü]/g, "u")
+            .replace(/[ç]/g, "c")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, ""),
         );
       }
-
     } catch (error: any) {
       setMessage(`Generation failed: ${error.message}`);
     } finally {
@@ -140,28 +153,32 @@ export default function Generator({ session }: { session: any }) {
 
   const publishToGithub = async () => {
     const token = settings.github_token;
-    
+
     if (!token) {
-      setMessage('Please save your GitHub Token first in Settings or login with GitHub.');
-      setActiveTab('settings');
+      setMessage(
+        "Please save your GitHub Token first in Settings or login with GitHub.",
+      );
+      setActiveTab("settings");
       return;
     }
 
     setGenerating(true); // Re-use loading state
-    setMessage('Publishing to GitHub...');
+    setMessage("Publishing to GitHub...");
 
     try {
       const octokit = new Octokit({ auth: token });
-      const path = `src/content/recipes/${generatedSlug}.md`; // Put in root or organize by folders? Putting in root of recipes for simplicity or sweet/savory if detected. 
-      // For now, let's put it in a 'generated' folder or just root 'src/content/recipes' if supported. 
+      const path = `src/content/recipes/${generatedSlug}.md`; // Put in root or organize by folders? Putting in root of recipes for simplicity or sweet/savory if detected.
+      // For now, let's put it in a 'generated' folder or just root 'src/content/recipes' if supported.
       // The current setup has 'sweet' folder. Let's ask user or just put in 'generated'.
       // Actually, let's just put it in 'sweet' for now or try to detect.
       // Simpler: src/content/recipes/generated/${slug}.md
-      
-      const filePath = `src/content/recipes/${generatedSlug}.md`;
-      const contentEncoded = btoa(unescape(encodeURIComponent(generatedContent))); // Handle UTF-8
 
-      await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+      const filePath = `src/content/recipes/${generatedSlug}.md`;
+      const contentEncoded = btoa(
+        unescape(encodeURIComponent(generatedContent)),
+      ); // Handle UTF-8
+
+      await octokit.request("PUT /repos/{owner}/{repo}/contents/{path}", {
         owner: settings.github_owner,
         repo: settings.github_repo,
         path: filePath,
@@ -169,7 +186,9 @@ export default function Generator({ session }: { session: any }) {
         content: contentEncoded,
       });
 
-      setMessage(`Success! Recipe published to ${filePath}. It will appear after the next build.`);
+      setMessage(
+        `Success! Recipe published to ${filePath}. It will appear after the next build.`,
+      );
     } catch (error: any) {
       setMessage(`GitHub Publish failed: ${error.message}`);
     } finally {
@@ -182,66 +201,88 @@ export default function Generator({ session }: { session: any }) {
   return (
     <div class="generator-container">
       <div class="tabs">
-        <button 
-          class={`tab-btn ${activeTab === 'generate' ? 'active' : ''}`}
-          onClick={() => setActiveTab('generate')}
+        <button
+          class={`tab-btn ${activeTab === "generate" ? "active" : ""}`}
+          onClick={() => setActiveTab("generate")}
         >
           Generator
         </button>
-        <button 
-          class={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
+        <button
+          class={`tab-btn ${activeTab === "settings" ? "active" : ""}`}
+          onClick={() => setActiveTab("settings")}
         >
           Settings
         </button>
       </div>
 
-      {activeTab === 'settings' && (
+      {activeTab === "settings" && (
         <form onSubmit={saveSettings} class="settings-form">
           <h3>API Keys</h3>
           <div class="form-group">
             <label>OpenRouter API Key</label>
-            <input 
-              type="password" 
+            <input
+              type="password"
               value={settings.openrouter_key}
-              onInput={(e) => setSettings({...settings, openrouter_key: e.currentTarget.value})}
+              onInput={(e) =>
+                setSettings({
+                  ...settings,
+                  openrouter_key: e.currentTarget.value,
+                })
+              }
               class="input-field"
               placeholder="sk-or-..."
             />
           </div>
           <div class="form-group">
             <label>GitHub Personal Access Token (Repo scope)</label>
-            <input 
-              type="password" 
+            <input
+              type="password"
               value={settings.github_token}
-              onInput={(e) => setSettings({...settings, github_token: e.currentTarget.value})}
+              onInput={(e) =>
+                setSettings({
+                  ...settings,
+                  github_token: e.currentTarget.value,
+                })
+              }
               class="input-field"
               placeholder="ghp_..."
             />
           </div>
-           <div class="form-group-row">
+          <div class="form-group-row">
             <div class="form-group">
               <label>GitHub Owner</label>
-              <input 
+              <input
                 value={settings.github_owner}
-                onInput={(e) => setSettings({...settings, github_owner: e.currentTarget.value})}
+                onInput={(e) =>
+                  setSettings({
+                    ...settings,
+                    github_owner: e.currentTarget.value,
+                  })
+                }
                 class="input-field"
               />
             </div>
             <div class="form-group">
               <label>GitHub Repo</label>
-              <input 
+              <input
                 value={settings.github_repo}
-                onInput={(e) => setSettings({...settings, github_repo: e.currentTarget.value})}
+                onInput={(e) =>
+                  setSettings({
+                    ...settings,
+                    github_repo: e.currentTarget.value,
+                  })
+                }
                 class="input-field"
               />
             </div>
           </div>
-          <button type="submit" class="btn-primary">Save Settings</button>
+          <button type="submit" class="btn-primary">
+            Save Settings
+          </button>
         </form>
       )}
 
-      {activeTab === 'generate' && (
+      {activeTab === "generate" && (
         <div class="generate-view">
           <div class="prompt-box">
             <textarea
@@ -251,12 +292,12 @@ export default function Generator({ session }: { session: any }) {
               class="textarea-field"
               rows={3}
             />
-            <button 
-              onClick={generateRecipe} 
+            <button
+              onClick={generateRecipe}
               disabled={generating || !prompt}
               class="btn-primary"
             >
-              {generating ? 'Generating...' : 'Generate Recipe'}
+              {generating ? "Generating..." : "Generate Recipe"}
             </button>
           </div>
 
@@ -264,13 +305,17 @@ export default function Generator({ session }: { session: any }) {
             <div class="preview-section">
               <h3>Preview</h3>
               <div class="preview-actions">
-                 <input 
+                <input
                   value={generatedSlug}
                   onInput={(e) => setGeneratedSlug(e.currentTarget.value)}
                   class="input-field small"
                   title="Filename slug"
                 />
-                <button onClick={publishToGithub} disabled={generating} class="btn-success">
+                <button
+                  onClick={publishToGithub}
+                  disabled={generating}
+                  class="btn-success"
+                >
                   Publish to GitHub
                 </button>
               </div>
