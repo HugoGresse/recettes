@@ -20,6 +20,13 @@ jobs:
     steps:
       - name: Checkout your repository using git
         uses: actions/checkout@v4
+      - name: Debug secrets (first 2 chars)
+        run: |
+          echo "PUBLIC_SUPABASE_URL starts with: ${PUBLIC_SUPABASE_URL:0:2}"
+          echo "PUBLIC_SUPABASE_ANON_KEY starts with: ${PUBLIC_SUPABASE_ANON_KEY:0:2}"
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
       - name: Install, build, and upload your site
         uses: withastro/action@v2
         env:
