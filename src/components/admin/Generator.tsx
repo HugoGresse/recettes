@@ -9,6 +9,27 @@ interface UserSettings {
   github_token: string;
   github_owner: string;
   github_repo: string;
+  selected_model: string;
+}
+
+interface OpenRouterModel {
+  id: string;
+  name: string;
+}
+
+const DEFAULT_MODEL = "openai/gpt-5.2";
+
+function toSlug(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[àâä]/g, "a")
+    .replace(/[éèêë]/g, "e")
+    .replace(/[îï]/g, "i")
+    .replace(/[ôö]/g, "o")
+    .replace(/[ùûü]/g, "u")
+    .replace(/[ç]/g, "c")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 export default function Generator({ session }: { session: any }) {
@@ -16,38 +37,56 @@ export default function Generator({ session }: { session: any }) {
   const [settings, setSettings] = useState<UserSettings>({
     openrouter_key: "",
     github_token: "",
-    github_owner: "hugogresse", // Default or fetch
-    github_repo: "recettes", // Default or fetch
+    github_owner: "hugogresse",
+    github_repo: "recettes",
+    selected_model: DEFAULT_MODEL,
   });
   const [loadingSettings, setLoadingSettings] = useState(true);
+  const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [modelFilter, setModelFilter] = useState("");
+  const [loadingModels, setLoadingModels] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState("");
   const [generatedTitle, setGeneratedTitle] = useState("");
   const [generatedSlug, setGeneratedSlug] = useState("");
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<"generate" | "settings">(
-    "generate",
-  );
+  const [activeTab, setActiveTab] = useState<"generate" | "settings">("generate");
 
-  // Load settings on mount
   useEffect(() => {
     async function loadSettings() {
       const snap = await getDoc(doc(db, "user_settings", user.uid));
       const data = snap.exists() ? snap.data() : null;
-
       if (data) {
         setSettings({
           openrouter_key: data.openrouter_key || "",
           github_token: data.github_token || "",
           github_owner: data.github_owner || "hugogresse",
           github_repo: data.github_repo || "recettes",
+          selected_model: data.selected_model || DEFAULT_MODEL,
         });
       }
       setLoadingSettings(false);
     }
     loadSettings();
   }, [user.uid]);
+
+  useEffect(() => {
+    if (!settings.openrouter_key) return;
+    setLoadingModels(true);
+    fetch("https://openrouter.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${settings.openrouter_key}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const list: OpenRouterModel[] = (data.data || [])
+          .map((m: any) => ({ id: m.id, name: m.name || m.id }))
+          .sort((a: OpenRouterModel, b: OpenRouterModel) => a.name.localeCompare(b.name));
+        setModels(list);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingModels(false));
+  }, [settings.openrouter_key]);
 
   const saveSettings = async (e: Event) => {
     e.preventDefault();
@@ -72,64 +111,79 @@ export default function Generator({ session }: { session: any }) {
     setGenerating(true);
     setMessage("");
     setGeneratedContent("");
+    setGeneratedTitle("");
+    setGeneratedSlug("");
 
     try {
-      const response = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${settings.openrouter_key}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "openai/gpt-5.2", // Cheap/Free model
-            messages: [
-              {
-                role: "system",
-                content: `Tu es une aide a la cuisine. Tu me donnes le recettes de cuisine avec un duplicata des quantités directement dans les instructions. Tu me dis aussi les points a faire attention pour bien réussir la recette. Generate a recipe in Markdown format compatible with Astro content collections.
-              Frontmatter (YAML) is REQUIRED:
-              ---
-              title: "Recipe Title"
-              description: "Short description"
-              prep_time: "15 min"
-              cook_time: "30 min"
-              servings: 4
-              difficulty: "Easy/Medium/Hard"
-              ---
-              
-              Followed by the recipe content in French. Use ## for sections (Ingrédients, Instructions).`,
-              },
-              { role: "user", content: `Create a recipe for: ${prompt}` },
-            ],
-          }),
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${settings.openrouter_key}`,
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          model: settings.selected_model,
+          stream: true,
+          messages: [
+            {
+              role: "system",
+              content: `Tu es une aide a la cuisine. Tu me donnes le recettes de cuisine avec un duplicata des quantités directement dans les instructions. Tu me dis aussi les points a faire attention pour bien réussir la recette. Generate a recipe in Markdown format compatible with Astro content collections.
+Frontmatter (YAML) is REQUIRED:
+---
+title: "Recipe Title"
+description: "Short description"
+prep_time: "15 min"
+cook_time: "30 min"
+servings: 4
+difficulty: "Easy/Medium/Hard"
+---
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
+Followed by the recipe content in French. Use ## for sections (Ingrédients, Instructions).`,
+            },
+            { role: "user", content: `Create a recipe for: ${prompt}` },
+          ],
+        }),
+      });
 
-      const content = data.choices[0].message.content;
-      setGeneratedContent(content);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error?.message || response.statusText);
+      }
 
-      // Extract title for filename
-      const titleMatch = content.match(/title:\s*["']?([^"'\n]+)["']?/);
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content || "";
+            if (delta) {
+              fullContent += delta;
+              setGeneratedContent(fullContent);
+            }
+          } catch {}
+        }
+      }
+
+      const titleMatch = fullContent.match(/title:\s*["']?([^"'\n]+)["']?/);
       if (titleMatch) {
         const title = titleMatch[1];
         setGeneratedTitle(title);
-        // Create simple slug
-        setGeneratedSlug(
-          title
-            .toLowerCase()
-            .replace(/[àâä]/g, "a")
-            .replace(/[éèêë]/g, "e")
-            .replace(/[îï]/g, "i")
-            .replace(/[ôö]/g, "o")
-            .replace(/[ùûü]/g, "u")
-            .replace(/[ç]/g, "c")
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, ""),
-        );
+        setGeneratedSlug(toSlug(title));
       }
     } catch (error: any) {
       setMessage(`Generation failed: ${error.message}`);
@@ -139,31 +193,20 @@ export default function Generator({ session }: { session: any }) {
   };
 
   const publishToGithub = async () => {
-    const token = settings.github_token;
-
-    if (!token) {
-      setMessage(
-        "Please save your GitHub Token first in Settings or login with GitHub.",
-      );
+    if (!settings.github_token) {
+      setMessage("Please save your GitHub Token first in Settings.");
       setActiveTab("settings");
       return;
     }
 
-    setGenerating(true); // Re-use loading state
+    setGenerating(true);
     setMessage("Publishing to GitHub...");
 
     try {
-      const octokit = new Octokit({ auth: token });
-      const path = `src/content/recipes/${generatedSlug}.md`; // Put in root or organize by folders? Putting in root of recipes for simplicity or sweet/savory if detected.
-      // For now, let's put it in a 'generated' folder or just root 'src/content/recipes' if supported.
-      // The current setup has 'sweet' folder. Let's ask user or just put in 'generated'.
-      // Actually, let's just put it in 'sweet' for now or try to detect.
-      // Simpler: src/content/recipes/generated/${slug}.md
-
+      const octokit = new Octokit({ auth: settings.github_token });
       const filePath = `src/content/recipes/${generatedSlug}.md`;
-      const contentEncoded = btoa(
-        unescape(encodeURIComponent(generatedContent)),
-      ); // Handle UTF-8
+      const bytes = new TextEncoder().encode(generatedContent);
+      const contentEncoded = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
 
       await octokit.request("PUT /repos/{owner}/{repo}/contents/{path}", {
         owner: settings.github_owner,
@@ -173,15 +216,21 @@ export default function Generator({ session }: { session: any }) {
         content: contentEncoded,
       });
 
-      setMessage(
-        `Success! Recipe published to ${filePath}. It will appear after the next build.`,
-      );
+      setMessage(`Success! Recipe published to ${filePath}. It will appear after the next build.`);
     } catch (error: any) {
       setMessage(`GitHub Publish failed: ${error.message}`);
     } finally {
       setGenerating(false);
     }
   };
+
+  const filteredModels = modelFilter
+    ? models.filter(
+        (m) =>
+          m.name.toLowerCase().includes(modelFilter.toLowerCase()) ||
+          m.id.toLowerCase().includes(modelFilter.toLowerCase()),
+      )
+    : models;
 
   if (loadingSettings) return <div>Loading user settings...</div>;
 
@@ -210,12 +259,7 @@ export default function Generator({ session }: { session: any }) {
             <input
               type="password"
               value={settings.openrouter_key}
-              onInput={(e) =>
-                setSettings({
-                  ...settings,
-                  openrouter_key: e.currentTarget.value,
-                })
-              }
+              onInput={(e) => setSettings({ ...settings, openrouter_key: e.currentTarget.value })}
               class="input-field"
               placeholder="sk-or-..."
             />
@@ -225,12 +269,7 @@ export default function Generator({ session }: { session: any }) {
             <input
               type="password"
               value={settings.github_token}
-              onInput={(e) =>
-                setSettings({
-                  ...settings,
-                  github_token: e.currentTarget.value,
-                })
-              }
+              onInput={(e) => setSettings({ ...settings, github_token: e.currentTarget.value })}
               class="input-field"
               placeholder="ghp_..."
             />
@@ -240,12 +279,7 @@ export default function Generator({ session }: { session: any }) {
               <label>GitHub Owner</label>
               <input
                 value={settings.github_owner}
-                onInput={(e) =>
-                  setSettings({
-                    ...settings,
-                    github_owner: e.currentTarget.value,
-                  })
-                }
+                onInput={(e) => setSettings({ ...settings, github_owner: e.currentTarget.value })}
                 class="input-field"
               />
             </div>
@@ -253,12 +287,7 @@ export default function Generator({ session }: { session: any }) {
               <label>GitHub Repo</label>
               <input
                 value={settings.github_repo}
-                onInput={(e) =>
-                  setSettings({
-                    ...settings,
-                    github_repo: e.currentTarget.value,
-                  })
-                }
+                onInput={(e) => setSettings({ ...settings, github_repo: e.currentTarget.value })}
                 class="input-field"
               />
             </div>
@@ -271,6 +300,47 @@ export default function Generator({ session }: { session: any }) {
 
       {activeTab === "generate" && (
         <div class="generate-view">
+          <div class="model-selector">
+            <div class="model-header">
+              <label>Model</label>
+              {loadingModels && <span class="loading-badge">Loading models...</span>}
+            </div>
+            {models.length > 0 ? (
+              <>
+                <input
+                  type="text"
+                  placeholder="Filter models..."
+                  value={modelFilter}
+                  onInput={(e) => setModelFilter(e.currentTarget.value)}
+                  class="input-field model-filter"
+                />
+                <select
+                  value={settings.selected_model}
+                  onChange={(e) =>
+                    setSettings({ ...settings, selected_model: e.currentTarget.value })
+                  }
+                  class="input-field"
+                >
+                  {filteredModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <input
+                type="text"
+                value={settings.selected_model}
+                onInput={(e) =>
+                  setSettings({ ...settings, selected_model: e.currentTarget.value })
+                }
+                class="input-field"
+                placeholder={DEFAULT_MODEL}
+              />
+            )}
+          </div>
+
           <div class="prompt-box">
             <textarea
               value={prompt}
@@ -298,11 +368,7 @@ export default function Generator({ session }: { session: any }) {
                   class="input-field small"
                   title="Filename slug"
                 />
-                <button
-                  onClick={publishToGithub}
-                  disabled={generating}
-                  class="btn-success"
-                >
+                <button onClick={publishToGithub} disabled={generating} class="btn-success">
                   Publish to GitHub
                 </button>
               </div>
@@ -358,6 +424,23 @@ export default function Generator({ session }: { session: any }) {
         .form-group-row .form-group {
           flex: 1;
         }
+        .model-selector {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+        .model-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .loading-badge {
+          font-size: 0.75rem;
+          color: var(--color-text-secondary);
+        }
+        .model-filter {
+          font-size: 0.875rem;
+        }
         .input-field, .textarea-field {
           padding: 0.75rem;
           border-radius: var(--radius-md);
@@ -376,6 +459,10 @@ export default function Generator({ session }: { session: any }) {
           font-weight: 600;
           align-self: flex-start;
         }
+        .btn-primary:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
         .btn-success {
           background: var(--color-accent);
           color: white;
@@ -384,6 +471,10 @@ export default function Generator({ session }: { session: any }) {
           border: none;
           cursor: pointer;
           font-weight: 600;
+        }
+        .btn-success:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
         }
         .code-preview {
           background: var(--color-surface-elevated);
