@@ -1,6 +1,7 @@
 import { h, Fragment } from "preact";
 import { useState, useEffect } from "preact/hooks";
-import { supabase } from "../../lib/supabase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 import { Octokit } from "octokit";
 
 interface UserSettings {
@@ -32,45 +33,31 @@ export default function Generator({ session }: { session: any }) {
   // Load settings on mount
   useEffect(() => {
     async function loadSettings() {
-      const { data, error } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      const sessionGithubToken =
-        session.provider_token &&
-        session.user.app_metadata.provider === "github"
-          ? session.provider_token
-          : "";
+      const snap = await getDoc(doc(db, "user_settings", user.uid));
+      const data = snap.exists() ? snap.data() : null;
 
       if (data) {
         setSettings({
           openrouter_key: data.openrouter_key || "",
-          github_token: data.github_token || sessionGithubToken || "",
+          github_token: data.github_token || "",
           github_owner: data.github_owner || "hugogresse",
           github_repo: data.github_repo || "recettes",
         });
-      } else if (sessionGithubToken) {
-        setSettings((s) => ({ ...s, github_token: sessionGithubToken }));
       }
       setLoadingSettings(false);
     }
     loadSettings();
-  }, [user.id, session.provider_token]);
+  }, [user.uid]);
 
   const saveSettings = async (e: Event) => {
     e.preventDefault();
     setLoadingSettings(true);
-    const { error } = await supabase.from("user_settings").upsert({
-      user_id: user.id,
-      ...settings,
-    });
-
-    if (error) setMessage(`Error saving settings: ${error.message}`);
-    else {
+    try {
+      await setDoc(doc(db, "user_settings", user.uid), settings, { merge: true });
       setMessage("Settings saved!");
       setActiveTab("generate");
+    } catch (error: any) {
+      setMessage(`Error saving settings: ${error.message}`);
     }
     setLoadingSettings(false);
   };

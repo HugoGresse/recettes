@@ -1,26 +1,20 @@
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
-import { supabase } from '../../lib/supabase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
 import Auth from './Auth';
 import Generator from './Generator';
 
 export default function AdminDashboard() {
-  const [session, setSession] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
       setLoading(false);
     });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   if (loading) {
@@ -29,22 +23,22 @@ export default function AdminDashboard() {
 
   return (
     <div class="admin-dashboard">
-      {!session ? (
-        <Auth onLogin={(user) => setSession({ user })} />
+      {!user ? (
+        <Auth onLogin={(u) => setUser(u)} />
       ) : (
         <div class="dashboard-content">
           <header class="dashboard-header">
             <h2>Admin Dashboard</h2>
-            <button 
-              onClick={() => supabase.auth.signOut()}
+            <button
+              onClick={() => signOut(auth)}
               class="btn-logout"
             >
               Sign Out
             </button>
           </header>
-          <p class="welcome-text">Welcome, {session.user.email}</p>
-          
-          <Generator session={session} />
+          <p class="welcome-text">Welcome, {user.email}</p>
+
+          <Generator session={{ user }} />
         </div>
       )}
 
